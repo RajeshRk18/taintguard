@@ -38,11 +38,11 @@ fn run() -> Result<(), String> {
     let log = log_path(text("session_id")?)?;
 
     match text("hook_event_name")? {
-        "UserPromptSubmit" => append(&log, "U", &hosts::hosts(text("prompt")?), ""),
+        "UserPromptSubmit" => append(&log, "U", &hosts::hosts(text("prompt")?, false), ""),
         "PostToolUse" => append(
             &log,
             "T",
-            &strings(field("tool_response")?),
+            &strings(field("tool_response")?, true),
             text("tool_name")?,
         ),
         "PreToolUse" => check(&log, field("tool_input")?, &allow),
@@ -56,8 +56,8 @@ fn check(log: &PathBuf, input: &Value, allow: &[String]) -> Result<(), String> {
     // Shell calls in both agents put the command in `command`. Skip the
     // `description` that the model writes next to it.
     let used = match input.get("command") {
-        Some(Value::String(c)) => hosts::hosts(c),
-        _ => strings(input),
+        Some(Value::String(c)) => hosts::hosts(c, false),
+        _ => strings(input, false),
     };
     let (tainted, trusted) = load(log)?;
     let allowed = |h: &str| {
@@ -94,11 +94,11 @@ fn check(log: &PathBuf, input: &Value, allow: &[String]) -> Result<(), String> {
 
 /// Hosts in every string inside a JSON value. Scanning the strings, not the
 /// serialized JSON, keeps `\n` escapes out of the tokens.
-fn strings(v: &Value) -> Vec<String> {
+fn strings(v: &Value, output: bool) -> Vec<String> {
     match v {
-        Value::String(s) => hosts::hosts(s),
-        Value::Array(a) => a.iter().flat_map(strings).collect(),
-        Value::Object(o) => o.values().flat_map(strings).collect(),
+        Value::String(s) => hosts::hosts(s, output),
+        Value::Array(a) => a.iter().flat_map(|v| strings(v, output)).collect(),
+        Value::Object(o) => o.values().flat_map(|v| strings(v, output)).collect(),
         _ => Vec::new(),
     }
 }

