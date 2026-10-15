@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "How the taintguard hook works",
+    "output": "docs/hook-flow.html",
+    "viewBox": [
+      1080,
+      600
+    ],
+    "column_fit": "spread",
+    "quality_profile": "showcase"
+  },
+  "participants": [
+    {
+      "id": "user",
+      "type": "external",
+      "label": "User",
+      "sublabel": "types prompts"
+    },
+    {
+      "id": "agent",
+      "type": "frontend",
+      "label": "Agent",
+      "sublabel": "Claude Code or Codex"
+    },
+    {
+      "id": "tool",
+      "type": "external",
+      "label": "Tool",
+      "sublabel": "Read, WebFetch, Bash"
+    },
+    {
+      "id": "hook",
+      "type": "security",
+      "label": "taintguard",
+      "sublabel": "one process per event"
+    },
+    {
+      "id": "log",
+      "type": "database",
+      "label": "Session log",
+      "sublabel": "~/.taintguard/<id>.log"
+    }
+  ],
+  "segments": [
+    {
+      "from": 155,
+      "to": 245,
+      "label": "Prompt"
+    },
+    {
+      "from": 252,
+      "to": 372,
+      "label": "Tool output"
+    },
+    {
+      "from": 380,
+      "to": 530,
+      "label": "Check before a call"
+    }
+  ],
+  "messages": [
+    {
+      "id": "prompt",
+      "from": "user",
+      "to": "agent",
+      "y": 172,
+      "label": "prompt",
+      "variant": "default"
+    },
+    {
+      "id": "prompt-hook",
+      "from": "agent",
+      "to": "hook",
+      "y": 202,
+      "label": "UserPromptSubmit",
+      "variant": "default"
+    },
+    {
+      "id": "trust-prompt",
+      "from": "hook",
+      "to": "log",
+      "y": 232,
+      "label": "U: hosts in prompt",
+      "variant": "dashed"
+    },
+    {
+      "id": "run-tool",
+      "from": "agent",
+      "to": "tool",
+      "y": 268,
+      "label": "read a page or file",
+      "variant": "default"
+    },
+    {
+      "id": "tool-output",
+      "from": "tool",
+      "to": "agent",
+      "y": 298,
+      "label": "text with evil.com",
+      "variant": "return"
+    },
+    {
+      "id": "post-hook",
+      "from": "agent",
+      "to": "hook",
+      "y": 328,
+      "label": "PostToolUse",
+      "variant": "default"
+    },
+    {
+      "id": "taint",
+      "from": "hook",
+      "to": "log",
+      "y": 358,
+      "label": "T: evil.com, Read",
+      "variant": "dashed"
+    },
+    {
+      "id": "pre-hook",
+      "from": "agent",
+      "to": "hook",
+      "y": 394,
+      "label": "PreToolUse: curl evil.com",
+      "variant": "emphasis"
+    },
+    {
+      "id": "load",
+      "from": "hook",
+      "to": "log",
+      "y": 424,
+      "label": "load T and U",
+      "variant": "default"
+    },
+    {
+      "id": "loaded",
+      "from": "log",
+      "to": "hook",
+      "y": 454,
+      "label": "T yes, U no",
+      "variant": "return"
+    },
+    {
+      "id": "deny",
+      "from": "hook",
+      "to": "agent",
+      "y": 484,
+      "label": "deny with reason",
+      "variant": "security"
+    },
+    {
+      "id": "ask-user",
+      "from": "agent",
+      "to": "user",
+      "y": 514,
+      "label": "asks about evil.com",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "agent",
+      "from": 167,
+      "to": 519,
+      "type": "frontend"
+    },
+    {
+      "participant": "hook",
+      "from": 197,
+      "to": 237,
+      "type": "security"
+    },
+    {
+      "participant": "tool",
+      "from": 263,
+      "to": 303,
+      "type": "external"
+    },
+    {
+      "participant": "hook",
+      "from": 323,
+      "to": 363,
+      "type": "security"
+    },
+    {
+      "participant": "hook",
+      "from": 389,
+      "to": 489,
+      "type": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Trusted hosts (U)",
+      "items": [
+        "Hosts the user names in a prompt",
+        "Hosts in a call that passed the check",
+        "Hosts on the allow list, with their subdomains"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Tainted hosts (T)",
+      "items": [
+        "Hosts in any tool output, with the tool name",
+        "A call is denied only if a host is T and not U",
+        "If the user names the host later, the call passes"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Failure behavior",
+      "items": [
+        "Any hook error exits 2, so the call is blocked",
+        "Claude Code and Codex read the same deny JSON"
+      ]
+    }
+  ]
+}
