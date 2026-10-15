@@ -1,9 +1,9 @@
-//! taintguard is a hook for Claude Code and Codex. It denies a tool call that
-//! uses a host the agent saw only in tool output, because untrusted content
-//! may have put that host there.
+//! taintguard is a hook for Claude Code and Codex. It blocks a command that
+//! uses a host the agent only saw in tool output, since that text may have
+//! planted it.
 //!
 //! Usage: `taintguard [ALLOWED_HOST...]`. It reads one hook event as JSON on
-//! stdin. Each allowed host also covers its subdomains.
+//! stdin. Allowed hosts also allow their subdomains.
 
 mod hosts;
 
@@ -16,8 +16,8 @@ use std::{env, process};
 
 fn main() {
     if let Err(e) = run() {
-        // Exit 2 blocks the call in both agents. If the guard breaks, it must
-        // not let calls through.
+        // Exit code 2 blocks the command in both agents, so a bug here can't
+        // let a command through.
         eprintln!("taintguard: {e}");
         process::exit(2);
     }
@@ -50,12 +50,12 @@ fn run() -> Result<(), String> {
     }
 }
 
-/// Denies the call if it uses a host that is tainted and not trusted. If the
-/// call passes, its hosts become trusted, because the agent used them before
-/// any tool output showed them.
+/// Blocks the command if it uses a suspect host that the user never named. If
+/// the command goes through, its hosts count as safe from then on, since the
+/// agent picked them before any tool output showed them.
 fn check(log: &PathBuf, input: &Value, allow: &[String]) -> Result<(), String> {
-    // Shell calls in both agents put the command in `command`. Skip the
-    // `description` that the model writes next to it.
+    // Both agents put shell commands in `command`. Skip the `description`
+    // the model writes next to it.
     let used = match input.get("command") {
         Some(Value::String(c)) => hosts::hosts(c, false),
         _ => strings(input, false),
@@ -93,8 +93,8 @@ fn check(log: &PathBuf, input: &Value, allow: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Hosts in every string inside a JSON value. Scanning the strings, not the
-/// serialized JSON, keeps `\n` escapes out of the tokens.
+/// Hosts in every string inside the JSON. It reads the strings themselves,
+/// not the JSON text, so `\n` escapes don't stick to a host name.
 fn strings(v: &Value, output: bool) -> Vec<String> {
     match v {
         Value::String(s) => hosts::hosts(s, output),
@@ -104,8 +104,8 @@ fn strings(v: &Value, output: bool) -> Vec<String> {
     }
 }
 
-/// One log file per session. Lines are `T<TAB>host<TAB>tool` (seen in tool
-/// output) or `U<TAB>host<TAB>` (trusted). The order of lines is not important.
+/// One log file per session. Each line is `T<TAB>host<TAB>tool` (suspect, seen
+/// in that tool's output) or `U<TAB>host<TAB>` (safe). Line order doesn't matter.
 fn log_path(session: &str) -> Result<PathBuf, String> {
     if session.is_empty()
         || !session
@@ -132,7 +132,7 @@ fn append(log: &PathBuf, kind: &str, hosts: &[String], tool: &str) -> Result<(),
         .filter(|h| seen.insert(*h))
         .map(|h| format!("{kind}\t{h}\t{tool}\n"))
         .collect();
-    // One write on an O_APPEND file, so parallel hook runs do not mix lines.
+    // One write in append mode, so hooks running at the same time don't mix lines.
     OpenOptions::new()
         .create(true)
         .append(true)

