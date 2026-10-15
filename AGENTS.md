@@ -1,38 +1,38 @@
 # AGENTS.md
 
-## Objective and scope
+## What this project is
 
-taintguard is a hook for Claude Code and Codex. It denies a shell or fetch call when the call uses a host that the agent saw only in tool output, because injected text in a web page, file or command output may have put that host there. The scope is hostnames and IPv4 addresses in tool calls. Code that runs inside a package install, paraphrased hosts and encoded hosts are out of scope.
+taintguard is a hook for Claude Code and Codex. It blocks a shell or fetch command that uses a host the agent only saw in tool output, because text in a web page, file or command output may have planted it. It only looks at host names and IPv4 addresses in commands. It doesn't try to catch code that runs inside an install, or hosts that the agent rewrites or encodes.
 
 ## Commands
 
-All build, lint and test commands live in `scripts/harness-check.sh`. Do not copy them into CI or into other docs.
+Every build, lint and test command lives in `scripts/harness-check.sh`. Don't copy the commands into CI or into other docs.
 
 | Task | Command |
 |---|---|
-| Fast local check (fmt, clippy, tests) | `scripts/harness-check.sh quick` |
-| CI parity on Linux | `scripts/harness-check.sh ci-linux` |
-| CI parity on macOS | `scripts/harness-check.sh ci-macos` |
+| Quick check (format, lint, tests) | `scripts/harness-check.sh quick` |
+| Same as CI on Linux | `scripts/harness-check.sh ci-linux` |
+| Same as CI on macOS | `scripts/harness-check.sh ci-macos` |
 | Format | `cargo fmt` |
 
-CI calls `scripts/harness-check.sh ci-linux` and `scripts/harness-check.sh ci-macos` from `.github/workflows/ci.yml`. If you add a check, add it to the script.
+`.github/workflows/ci.yml` calls the script. If you add a check, add it to the script.
 
-## Layout
+## Files
 
-- `src/main.rs` reads one hook event, keeps the per-session log, and writes the deny decision.
-- `src/hosts.rs` finds hostnames in text. Both the output side and the call side use it.
-- `src/tlds.txt` is the IANA TLD list. To refresh it, download `https://data.iana.org/TLD/tlds-alpha-by-domain.txt` again.
-- `tests/hook.rs` runs the binary through an injection, a deny, an allow-list pass and a user approval.
+- `src/main.rs` reads one hook event, keeps the log for the session, and prints the block message.
+- `src/hosts.rs` finds host names in text. Tool output and commands both go through it.
+- `src/tlds.txt` is the official list of domain endings. To update it, download `https://data.iana.org/TLD/tlds-alpha-by-domain.txt` again.
+- `tests/hook.rs` runs the real binary through a planted host, a block, an allowed host, and a user approval.
 
-## Prerequisites
+## What you need
 
-- A stable Rust toolchain with `rustfmt` and `clippy`.
-- For live tests, the `claude` and `codex` CLIs.
+- Rust with `rustfmt` and `clippy`.
+- The `claude` and `codex` CLIs, if you want to test with a real agent.
 
-## Known failure patterns
+## Problems you may run into
 
-- Codex loads project hooks only when the project `.codex/` layer is trusted, and it skips any hook whose hash you have not reviewed. For a one-off test, pass the hooks with `-c` and add `--dangerously-bypass-hook-trust`.
-- `claude -p --allowedTools` takes several values, so it also takes the prompt as a value. Pass the prompt on stdin.
-- zsh treats `?` in an unquoted URL as a glob, so a test command like `curl https://example.com/?d=1` fails before the hook sees it. Quote URLs in test fixtures.
-- `cargo fmt` reflows the test tables. Run it before you edit the tables with exact string matches.
-- A new false deny usually comes from a code token that ends in a real TLD. Add a case to the table in `src/hosts.rs` before you change the rules.
+- Codex only loads hooks from a project's `.codex/` folder if you trust the project, and it skips any hook you haven't reviewed. For a one-off test, pass the hooks with `-c` and add `--dangerously-bypass-hook-trust`.
+- `claude -p --allowedTools` takes more than one value, so it also swallows the prompt. Send the prompt on stdin instead.
+- zsh reads `?` in a URL without quotes as a file pattern, so `curl https://example.com/?d=1` fails before the hook sees it. Put quotes around URLs in test files.
+- `cargo fmt` rewraps the test tables. Run it before you edit those tables by exact text match.
+- A new false block usually comes from code that ends like a real domain, e.g., `user.name`. Add that case to the test table in `src/hosts.rs` before you change the rules.
