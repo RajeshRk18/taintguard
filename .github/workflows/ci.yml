@@ -1,0 +1,13 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  check:
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, mode: ci-linux }
+          - { os: macos-latest, mode: ci-macos }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/harness-check.sh ${{ matrix.mode }}
