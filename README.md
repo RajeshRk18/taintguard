@@ -97,5 +97,3 @@ scripts/harness-check.sh quick      # format, lint, tests
 scripts/harness-check.sh ci-macos   # what CI runs, plus a release build
 scripts/harness-check.sh ci-linux
 ```
-
-[AGENTS.md](AGENTS.md) explains the files and the problems you may run into.
