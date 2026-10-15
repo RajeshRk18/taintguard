@@ -125,8 +125,10 @@ fn append(log: &PathBuf, kind: &str, hosts: &[String], tool: &str) -> Result<(),
     if hosts.is_empty() {
         return Ok(());
     }
+    let mut seen = HashSet::new();
     let buf: String = hosts
         .iter()
+        .filter(|h| seen.insert(*h))
         .map(|h| format!("{kind}\t{h}\t{tool}\n"))
         .collect();
     // One write on an O_APPEND file, so parallel hook runs do not mix lines.
