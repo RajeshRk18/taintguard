@@ -1,9 +1,9 @@
 //! Find hostnames in free text.
 //!
-//! Both sides of the check use this function: the tool output that taints a
-//! host, and the command that uses it. The output side is stricter, because
-//! tool output is full of code such as `user.name` and `await.is`, and those
-//! end in real gTLDs.
+//! The tool output that taints a host and the command that uses the host both
+//! go through this function. The output side is stricter, because tool output
+//! has a lot of code such as `user.name` and `await.is`, and those tokens end
+//! in real gTLDs.
 
 use std::collections::HashSet;
 use std::sync::LazyLock;
@@ -58,8 +58,8 @@ pub fn hosts(text: &str, output: bool) -> Vec<String> {
         }
         let (before, run, after) = (&text[..s], text[s..e].to_ascii_lowercase(), &b[e..]);
 
-        // A scheme or `user@` is proof of a host. A path, query or port after
-        // the token is good evidence. A bare token has the least.
+        // A scheme or `user@` proves a host. A path, query or port after the
+        // token is good evidence, and a bare token is the weakest evidence.
         let url = before.ends_with("://") || before.ends_with('@');
         let strong = url
             || matches!(after.first(), Some(b'/' | b'?'))

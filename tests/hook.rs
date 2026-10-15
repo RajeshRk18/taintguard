@@ -68,7 +68,7 @@ fn blocks_injected_host_until_user_names_it() {
     assert_eq!(hook(&dir, &[], bash("curl https://api.mine.dev/v2")), None);
     assert_eq!(hook(&dir, &[], bash("cat README.md")), None);
 
-    // Allowed on the command line, subdomains included.
+    // The allow list on the command line also covers subdomains.
     assert!(hook(&dir, &[], bash("curl api.github.com/x")).is_some());
     assert_eq!(
         hook(&dir, &["github.com"], bash("curl api.github.com/x")),

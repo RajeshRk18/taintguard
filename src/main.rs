@@ -1,4 +1,4 @@
-//! taintguard: a hook for Claude Code and Codex. It denies a tool call that
+//! taintguard is a hook for Claude Code and Codex. It denies a tool call that
 //! uses a host the agent saw only in tool output, because untrusted content
 //! may have put that host there.
 //!
@@ -50,8 +50,9 @@ fn run() -> Result<(), String> {
     }
 }
 
-/// Deny if a host in the call is tainted and not trusted. If not, trust its
-/// hosts: the agent used them before any tool output showed them.
+/// Denies the call if it uses a host that is tainted and not trusted. If the
+/// call passes, its hosts become trusted, because the agent used them before
+/// any tool output showed them.
 fn check(log: &PathBuf, input: &Value, allow: &[String]) -> Result<(), String> {
     // Shell calls in both agents put the command in `command`. Skip the
     // `description` that the model writes next to it.
