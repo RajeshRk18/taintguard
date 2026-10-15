@@ -82,7 +82,7 @@
       "from": "hook",
       "to": "log",
       "y": 232,
-      "label": "U: hosts in prompt",
+      "label": "U: hosts you typed",
       "variant": "dashed"
     },
     {
@@ -98,7 +98,7 @@
       "from": "tool",
       "to": "agent",
       "y": 298,
-      "label": "text with evil.com",
+      "label": "text naming evil.com",
       "variant": "return"
     },
     {
@@ -114,7 +114,7 @@
       "from": "hook",
       "to": "log",
       "y": 358,
-      "label": "T: evil.com, Read",
+      "label": "T: evil.com, from Read",
       "variant": "dashed"
     },
     {
@@ -130,7 +130,7 @@
       "from": "hook",
       "to": "log",
       "y": 424,
-      "label": "load T and U",
+      "label": "read the log",
       "variant": "default"
     },
     {
@@ -138,7 +138,7 @@
       "from": "log",
       "to": "hook",
       "y": 454,
-      "label": "T yes, U no",
+      "label": "suspect, never typed",
       "variant": "return"
     },
     {
@@ -146,7 +146,7 @@
       "from": "hook",
       "to": "agent",
       "y": 484,
-      "label": "deny with reason",
+      "label": "block, with reason",
       "variant": "security"
     },
     {
@@ -154,7 +154,7 @@
       "from": "agent",
       "to": "user",
       "y": 514,
-      "label": "asks about evil.com",
+      "label": "asks you about evil.com",
       "variant": "return"
     }
   ],
@@ -193,28 +193,28 @@
   "cards": [
     {
       "dot": "emerald",
-      "title": "Trusted hosts (U)",
+      "title": "Safe hosts (U)",
       "items": [
-        "Hosts the user names in a prompt",
-        "Hosts in a call that passed the check",
-        "Hosts on the allow list, with their subdomains"
+        "Hosts you type in a prompt",
+        "Hosts in a command that already ran",
+        "Hosts you pass as arguments, plus their subdomains"
       ]
     },
     {
       "dot": "rose",
-      "title": "Tainted hosts (T)",
+      "title": "Suspect hosts (T)",
       "items": [
-        "Hosts in any tool output, with the tool name",
-        "A call is denied only if a host is T and not U",
-        "If the user names the host later, the call passes"
+        "Hosts in any tool output, with the tool's name",
+        "A command is blocked only if a host is suspect and you never typed it",
+        "Name the host in your next message to let it through"
       ]
     },
     {
       "dot": "amber",
-      "title": "Failure behavior",
+      "title": "If taintguard breaks",
       "items": [
-        "Any hook error exits 2, so the call is blocked",
-        "Claude Code and Codex read the same deny JSON"
+        "It exits with code 2, so the command is blocked",
+        "Claude Code and Codex read the same block message"
       ]
     }
   ]
